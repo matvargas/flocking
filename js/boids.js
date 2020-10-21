@@ -1,6 +1,6 @@
 let boid;
 let creatureMeshGroup = new THREE.Group();
-const creatureNum = 250;
+var creatureNum = 100;
 
 const colorPalette = {
     screenBg: 0x041f60,
@@ -32,13 +32,15 @@ const onResize = () => {
 /* datGUI
 -------------------------------------------------------------*/
 let gui = new dat.GUI();
+
 let guiControls = new function () {
-    this.container = 'ball';
+    this.container = 'box';
     this.diffuse = () => {
         boid.setBoost();
     }
     this.params = {
         maxSpeed: 7,
+        creatureNum: 1,
         seek: {
             maxForce: 0.04
         },
@@ -55,30 +57,16 @@ let guiControls = new function () {
         }
     }
 }
-gui.add(guiControls, 'container', ['ball', 'box']).onChange((e) => {
 
-    if (guiControls.container === 'ball') {
-        // for box
-        scene.remove(spotLight1);
-        scene.remove(boxContainer.mesh);
-        // for ball
-        scene.add(spotLight2);
-        scene.add(ballContainer.mesh);
-    } else if (guiControls.container === 'box') {
-        // for ball
-        scene.remove(spotLight2);
-        scene.remove(ballContainer.mesh);
-        // for box
-        scene.add(spotLight1);
-        scene.add(boxContainer.mesh);
-    }
-
+gui.add(window, "creatureNum", 1, 600).step(1).onChange((e) => {
+    scene.remove(spotLight1);
+    scene.remove(boxContainer.mesh);
+    scene.add(spotLight1);
+    scene.add(boxContainer.mesh);
     generateBoid();
 });
 
-gui.add(guiControls, 'diffuse');
 
-// gui.add(guiControls.params, 'maxSpeed', 5, 20);
 
 // const folderAlign = gui.addFolder('align');
 // folderAlign.add(guiControls.params.align, 'effectiveRange', 0, 200);
