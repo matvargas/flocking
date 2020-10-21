@@ -1,6 +1,7 @@
 let boid;
 let creatureMeshGroup = new THREE.Group();
-var creatureNum = 100;
+var creatureNum = 150;
+var camera;
 
 const colorPalette = {
     screenBg: 0x041f60,
@@ -40,7 +41,6 @@ let guiControls = new function () {
     }
     this.params = {
         maxSpeed: 7,
-        creatureNum: 1,
         seek: {
             maxForce: 0.04
         },
@@ -53,12 +53,13 @@ let guiControls = new function () {
             maxForce: 0.2
         },
         choesin: {
-            effectiveRange: 200
+            effectiveRange: 1800,
+            maxForce: 0.05
         }
     }
 }
 
-gui.add(window, "creatureNum", 1, 600).step(1).onChange((e) => {
+gui.add(window, "creatureNum", 1, 1000).step(1).onChange((e) => {
     scene.remove(spotLight1);
     scene.remove(boxContainer.mesh);
     scene.add(spotLight1);
@@ -66,21 +67,19 @@ gui.add(window, "creatureNum", 1, 600).step(1).onChange((e) => {
     generateBoid();
 });
 
+const folderAlign = gui.addFolder('align');
+folderAlign.add(guiControls.params.align, 'effectiveRange', 0, 10000);
+folderAlign.add(guiControls.params.align, 'maxForce', 0, 1);
+folderAlign.close();
 
-
-// const folderAlign = gui.addFolder('align');
-// folderAlign.add(guiControls.params.align, 'effectiveRange', 0, 200);
-// folderAlign.add(guiControls.params.align, 'maxForce', 0, 0.3);
-// folderAlign.open();
-
-// const folderSeparate = gui.addFolder('separate');
-// folderSeparate.add(guiControls.params.separate, 'effectiveRange', 0, 200);
-// folderSeparate.add(guiControls.params.separate, 'maxForce', 0, 0.4);
-// folderSeparate.open();
+const folderSeparate = gui.addFolder('separate');
+folderSeparate.add(guiControls.params.separate, 'effectiveRange', 0, 10000);
+folderSeparate.add(guiControls.params.separate, 'maxForce', 0, 1);
+folderSeparate.close();
 
 // const folderChoesin = gui.addFolder('choesin');
-// folderChoesin.add(guiControls.params.choesin, 'effectiveRange', 0, 300);
-// folderChoesin.add(guiControls.params.seek, 'maxForce', 0, 0.05);
+// folderChoesin.add(guiControls.params.choesin, 'effectiveRange', 0, 10000);
+// folderChoesin.add(guiControls.params.seek, 'maxForce', 0, 1);
 // folderChoesin.open();
 
 class BoxContainer {
@@ -98,37 +97,13 @@ class BoxContainer {
     }
 }
 
-class BallContainer {
-    constructor(radius = 500, widthSegments = 10, heightSegments = 10, color = 0xffffff) {
-        const geometry = new THREE.SphereGeometry(radius, widthSegments, heightSegments);
-        // const material = new THREE.MeshPhongMaterial({
-        //     color: color,
-        //     transparent: true,
-        //     opacity: 0.1,
-        //     wireframe: false,
-        //     depthWrite: true,
-        //     blending: THREE.AdditiveBlending
-        // });
-        const material = new THREE.MeshLambertMaterial({
-            color: color,
-            transparent: true,
-            opacity: 0.2,
-            wireframe: false,
-            depthWrite: false,
-            blending: THREE.AdditiveBlending
-        });
-        this.mesh = new THREE.Mesh(geometry, material);
-    }
-}
-
-class PointLightBall {
-    constructor(radius = 500, widthSegments = 100, heightSegments = 100, color = 0xFFFFFF) {
+class PointLightCone {
+    constructor(radius = 500, height = 100, radialSegments = 100, heightSegments = 100, color = 0xFFFFFF) {
         this.meshGroup = new THREE.Group();
 
-        // ball1
-        let geometry = new THREE.SphereGeometry(radius, widthSegments, heightSegments);
+        let geometry = new THREE.ConeGeometry(radius, height, radialSegments, heightSegments);
         let material = new THREE.MeshBasicMaterial({
-            color: color,
+            color: 0x535353,
             transparent: true,
             opacity: 0.6,
             depthWrite: false,
@@ -137,19 +112,10 @@ class PointLightBall {
         this.ball1 = new THREE.Mesh(geometry, material);
         this.ball1.position.set(0, 0, 0);
 
-        // ball2
-        geometry = new THREE.SphereGeometry(30, 30, 30);
-        material = new THREE.MeshBasicMaterial({
-            color: 0xffffff
-        });
-        this.ball2 = new THREE.Mesh(geometry, material);
-        this.ball2.position.set(0, 0, 0);
-
         // point light
         this.pointLight = this.getPointLight(radius);
 
         this.meshGroup.add(this.ball1);
-        this.meshGroup.add(this.ball2);
         this.meshGroup.add(this.pointLight);
     }
     getPointLight(distance) {
@@ -175,18 +141,14 @@ class Boid {
             creature.applyForce(this.separate(creature));
             creature.applyForce(this.choesin(creature));
 
-            // aboid light ball
-            creature.applyForce(this.avoidLightBall(creature, pointLightBall.ball1));
+            // Avoid cone in the centrer
+            creature.applyForce(this.avoidLightBall(creature, pointLightCone.ball1));
 
-            // aboid container
-            if (guiControls.container === 'ball') {
-                creature.applyForce(this.avoidBallContainer(creature, ballContainer.mesh.geometry.parameters.radius));
-            } else if (guiControls.container === 'box') {
-                creature.applyForce(this.avoidBoxContainer(creature, boxContainer.mesh.geometry.parameters.width / 2,
-                    boxContainer.mesh.geometry.parameters.height / 2,
-                    boxContainer.mesh.geometry.parameters.depth / 2
-                ));
-            }
+            // Avoid container
+            creature.applyForce(this.avoidBoxContainer(creature, boxContainer.mesh.geometry.parameters.width / 2,
+                boxContainer.mesh.geometry.parameters.height / 2,
+                boxContainer.mesh.geometry.parameters.depth / 2
+            ));
 
             creature.update();
         });
@@ -205,8 +167,17 @@ class Boid {
     }
 
     seek(currentCreature, target = new THREE.Vector3()) {
-        const maxSpeed = this.params.maxSpeed;;
-        const maxForce = this.params.seek.maxForce;
+        var maxSpeed;
+        var maxForce;
+
+        if(currentCreature.isGoalCreature){
+            maxForce = 1;
+            maxSpeed = this.params.maxSpeed*2;
+        } else {
+            maxForce = this.params.seek.maxForce;
+            maxSpeed = this.params.maxSpeed;
+        }
+
         const toGoalVector = new THREE.Vector3();
         toGoalVector.subVectors(target, currentCreature.mesh.position);
         const distance = toGoalVector.length();
@@ -224,9 +195,21 @@ class Boid {
     align(currentCreature) {
         const sumVector = new THREE.Vector3();
         let cnt = 0;
-        const maxSpeed = this.params.maxSpeed;;
-        const maxForce = this.params.align.maxForce;
-        const effectiveRange = this.params.align.effectiveRange;
+
+        var maxSpeed;
+        var maxForce;
+        var effectiveRange;
+
+        if(currentCreature.isGoalCreature){
+            maxSpeed = this.params.maxSpeed*2;
+            maxForce = this.params.align.maxForce;
+            effectiveRange = this.params.align.effectiveRange*10;
+        } else {
+            maxSpeed = this.params.maxSpeed;
+            maxForce = this.params.align.maxForce;
+            effectiveRange = this.params.align.effectiveRange;
+        }
+
         const steerVector = new THREE.Vector3();
 
         this.creatures.forEach((creature) => {
@@ -290,7 +273,14 @@ class Boid {
     choesin(currentCreature) {
         const sumVector = new THREE.Vector3();
         let cnt = 0;
-        const effectiveRange = this.params.choesin.effectiveRange;
+
+        var effectiveRange;
+
+        if(currentCreature.isGoalCreature){
+            effectiveRange = 1000;
+        } else {
+            effectiveRange = this.params.choesin.effectiveRange;
+        }
         const steerVector = new THREE.Vector3();
 
         this.creatures.forEach((creature) => {
@@ -382,14 +372,34 @@ class Boid {
 }
 
 class Creature {
-    constructor() {
-        const geometry = new THREE.CylinderGeometry(1, 8, 25, 12);
+    constructor(isGoalCreature) {
+
+        this.isGoalCreature = isGoalCreature;
+
+        let width = getRandomNum(1, 50)
+        let height = getRandomNum(1, 50)
+        let depth = getRandomNum(1, 50)
+
+        var geometry;
+
+        if(isGoalCreature)
+            geometry = new THREE.SphereGeometry(55, 10, 10);
+        else
+            geometry = new THREE.BoxGeometry(width, height, depth);
         geometry.rotateX(THREE.Math.degToRad(90));
-        const color = new THREE.Color(`hsl(${getRandomNum(360)}, 100%, 50%)`);
+
+        var color;
+
+        if(isGoalCreature)
+            color = new THREE.Color(0xff0000);
+        else
+            color = new THREE.Color(`hsl(${getRandomNum(360)}, 100%, 50%)`);
+
         const material = new THREE.MeshLambertMaterial({
             wireframe: false,
             color: color
         });
+
         this.mesh = new THREE.Mesh(geometry, material);
         const radius = getRandomNum(500, 1000);
         const theta = THREE.Math.degToRad(getRandomNum(180));
@@ -443,8 +453,6 @@ class Creature {
 }
 
 
-
-
 /* scene
 -------------------------------------------------------------*/
 const scene = new THREE.Scene();
@@ -452,10 +460,10 @@ scene.fog = new THREE.Fog(colorPalette.screenBg, 3000, 20000);
 
 /* camera
 -------------------------------------------------------------*/
-const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 10000);
+camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 10000);
 camera.position.x = 0;
 camera.position.y = 0;
-camera.position.z = 1800;
+camera.position.z = 2000;
 camera.lookAt(scene.position);
 scene.add(camera);
 
@@ -470,50 +478,43 @@ renderer.shadowMap.enabled = true;
 /* AmbientLight
 -------------------------------------------------------------*/
 const ambientLight = new THREE.AmbientLight(colorPalette.ambientLight);
-ambientLight.intensity = 0.3;
+ambientLight.intensity = 1.0;
 scene.add(ambientLight);
 
 /* SpotLight
 -------------------------------------------------------------*/
 const spotLight1 = new THREE.SpotLight(colorPalette.spotLight);
-spotLight1.angle = Math.PI / 4;
+spotLight1.angle = Math.PI;
 spotLight1.intensity = 9;
 spotLight1.decay = 4;
 spotLight1.distance = 9000;
 spotLight1.penumbra = 1.0;
 spotLight1.position.set(-3000, 3100, 2900);
-//scene.add(spotLight1);
+scene.add(spotLight1);
 
 /* SpotLight
 -------------------------------------------------------------*/
 const spotLight2 = new THREE.SpotLight(colorPalette.spotLight);
 spotLight2.angle = Math.PI / 4;
-spotLight2.intensity = 8;
-spotLight2.decay = 8.2;
-spotLight2.distance = 7000;
+spotLight2.intensity = 10;
+spotLight2.decay = 1;
+spotLight2.distance = 9000;
 spotLight2.penumbra = 1.0;
-spotLight2.position.set(-1700, 2200, 2400);
+spotLight2.position.set(1700, 2200, 2400);
 scene.add(spotLight2);
 
-/* PointLightBall
+/* PointLightCone
 -------------------------------------------------------------*/
-const pointLightBall = new PointLightBall(300, 50, 50);
-scene.add(pointLightBall.meshGroup);
-pointLightBall.ball1.geometry.computeBoundingSphere();
+const pointLightCone = new PointLightCone(300, 1000, 50, 50);
+scene.add(pointLightCone.meshGroup);
+pointLightCone.ball1.geometry.computeBoundingSphere();
 
 /* Container
 -------------------------------------------------------------*/
 // Box
 const isLongSideWidth = window.innerWidth > window.innerHeight;
-const boxContainer = new BoxContainer(2300, 2300, 2300, colorPalette.boxContainer);
-if (guiControls.container === 'box') {
-    scene.add(boxContainer.mesh);
-}
-// Ball
-const ballContainer = new BallContainer(1500, 100, 100, colorPalette.ballContainer);
-if (guiControls.container === 'ball') {
-    scene.add(ballContainer.mesh);
-}
+const boxContainer = new BoxContainer(5000, 5000, 5000, colorPalette.boxContainer);
+scene.add(boxContainer.mesh);
 
 /* creature
 -------------------------------------------------------------*/
@@ -522,10 +523,14 @@ const generateBoid = () => {
     scene.remove(creatureMeshGroup);
     creatureMeshGroup = new THREE.Group();
     for (let i = 0; i < creatureNum; i++) {
-        const creature = new Creature();
+        const creature = new Creature(false);
         creatureMeshGroup.add(creature.mesh);
         creatures.push(creature);
     }
+    const goalCreature = new Creature(true);
+    creatureMeshGroup.add(goalCreature.mesh);
+    creatures.push(goalCreature);
+
     boid = new Boid(creatures);
     scene.add(creatureMeshGroup);
 }
